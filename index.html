@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <title>Visualizador de Skin Minecraft</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -162,6 +162,19 @@
       }
     });
     window.onload = init;
+  </script>
+  <script>
+    // Bloqueia zoom via Ctrl+Scroll e Ctrl+Plus/Minus
+    document.addEventListener('wheel', function(e) {
+      if (e.ctrlKey) e.preventDefault();
+    }, { passive: false });
+    document.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=')) {
+        e.preventDefault();
+      }
+    });
+    // Força zoom 100% no QWebEngineView
+    document.body.style.zoom = '100%';
   </script>
 </body>
 </html>
