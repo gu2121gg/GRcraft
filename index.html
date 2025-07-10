@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Visualizador de Skin Minecraft</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+    }
+    #canvasContainer {
+      width: 100%;
+      height: 100%;
+      min-height: 600px;
+      min-width: 600px;
+      background: #2d3748;
+      border-radius: 16px;
+      box-shadow: 0 0 24px #000a;
+    }
+    #skinFileInput { display: none; }
+  </style>
+</head>
+<body class="bg-gray-900 text-white flex h-screen w-screen p-0 m-0 overflow-hidden">
+  <div class="flex flex-col flex-grow items-center justify-between w-full h-full">
+    <div class="bg-gray-800 p-4 rounded-lg shadow-xl max-w-md w-full flex flex-col items-center space-y-3 mb-4 mt-4">
+      <h1 class="text-xl font-bold text-blue-400">Visualizador de Skin Minecraft</h1>
+      <input type="file" id="skinFileInput" accept=".png">
+      <button id="loadSkinButton" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 text-sm">
+        Carregar Skin (PNG)
+      </button>
+      <p id="statusMessage" class="text-gray-400 text-xs text-center">Carregando modelo do personagem...</p>
+    </div>
+    <div id="canvasContainer" class="mx-auto"></div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script>
+    let scene, camera, renderer, characterModel;
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    const MINECRAFT_MODEL_FILE = 'model.gltf';
+    function init() {
+      const canvasContainer = document.getElementById('canvasContainer');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x2d3748);
+      camera = new THREE.PerspectiveCamera(75, canvasContainer.clientWidth / canvasContainer.clientHeight, 0.1, 1000);
+      camera.position.set(0, 1.6, 6);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      canvasContainer.appendChild(renderer.domElement);
+      const ambientLight = new THREE.AmbientLight(0x404040, 2);
+      scene.add(ambientLight);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+      directionalLight.position.set(1, 1, 1).normalize();
+      scene.add(directionalLight);
+      const loader = new THREE.GLTFLoader();
+      loader.load(MINECRAFT_MODEL_FILE, function (gltf) {
+        characterModel = gltf.scene;
+        characterModel.scale.set(0.18, 0.18, 0.18);
+        characterModel.position.set(0.56, -1, 0);
+        characterModel.rotation.y = Math.PI;
+        characterModel.traverse((child) => {
+          if (child.isMesh) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(mat => {
+                if (mat.color) mat.color.set(0xffffff);
+                mat.needsUpdate = true;
+              });
+            } else {
+              if (child.material.color) child.material.color.set(0xffffff);
+              child.material.needsUpdate = true;
+            }
+          }
+        });
+        scene.add(characterModel);
+        document.getElementById('statusMessage').textContent = 'Modelo carregado. Carregue sua skin!';
+      }, function (xhr) {
+        // progresso opcional
+      }, function (error) {
+        console.error('Erro ao carregar o modelo GLTF:', error);
+        document.getElementById('statusMessage').textContent = 'Erro ao carregar o modelo. Verifique se o arquivo .gltf está correto.';
+      });
+      renderer.domElement.addEventListener('mousedown', onMouseDown);
+      renderer.domElement.addEventListener('mouseup', onMouseUp);
+      renderer.domElement.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('resize', onWindowResize);
+      animate();
+    }
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    function onWindowResize() {
+      const canvasContainer = document.getElementById('canvasContainer');
+      camera.aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+    }
+    function onMouseDown(event) {
+      isDragging = true;
+      previousMousePosition.x = event.clientX;
+    }
+    function onMouseUp() {
+      isDragging = false;
+    }
+    function onMouseMove(event) {
+      if (!isDragging || !characterModel) return;
+      const deltaX = event.clientX - previousMousePosition.x;
+      characterModel.rotation.y += deltaX * 0.01;
+      previousMousePosition.x = event.clientX;
+    }
+    function applySkinTexture(textureUrl, fileName = 'skin') {
+      const textureLoader = new THREE.TextureLoader();
+      textureLoader.load(textureUrl, function (texture) {
+        texture.magFilter = THREE.NearestFilter;
+        texture.minFilter = THREE.NearestFilter;
+        if (characterModel) {
+          characterModel.traverse((child) => {
+            if (child.isMesh) {
+              if (Array.isArray(child.material)) {
+                child.material.forEach(mat => {
+                  mat.map = texture;
+                  mat.needsUpdate = true;
+                  if (mat.color) mat.color.set(0xffffff);
+                });
+              } else {
+                child.material.map = texture;
+                child.material.needsUpdate = true;
+                if (child.material.color) child.material.color.set(0xffffff);
+              }
+            }
+          });
+          statusMessage.textContent = `Skin '${fileName}' aplicada com sucesso!`;
+        }
+      }, undefined, function (error) {
+        console.error('Erro ao carregar a textura:', error);
+        statusMessage.textContent = 'Erro ao aplicar a skin.';
+      });
+    }
+    const skinFileInput = document.getElementById('skinFileInput');
+    const loadSkinButton = document.getElementById('loadSkinButton');
+    const statusMessage = document.getElementById('statusMessage');
+    loadSkinButton.addEventListener('click', () => skinFileInput.click());
+    skinFileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (file && file.type === 'image/png') {
+        statusMessage.textContent = `Carregando skin: ${file.name}...`;
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          applySkinTexture(e.target.result, file.name);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        statusMessage.textContent = 'Por favor, selecione um arquivo PNG válido.';
+      }
+    });
+    window.onload = init;
+  </script>
+</body>
+</html>
